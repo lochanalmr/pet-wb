@@ -1,0 +1,9 @@
+.menu-item {
+  display: block;
+  width: 100%;
+  text-align: start;
+}
+
+.transaction-field {
+  min-width: 0;
+}
