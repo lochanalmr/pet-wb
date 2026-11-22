@@ -681,7 +681,7 @@ function renderTransactions() {
 function setupAuthUI() {
   // Sign In with Google
   if (signInButton) {
-    signInButton.addEventListener("click", async () => {
+    signInButton.addEventListener("click", () => {
       if (!isFirebaseConfigured()) {
         alert(
           "Firebase is not yet configured!\n\n" +
@@ -693,22 +693,17 @@ function setupAuthUI() {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: "select_account" });
 
-      try {
-        await signInWithPopup(auth, provider);
-      } catch (error) {
+      signInWithPopup(auth, provider).catch((error) => {
         console.error("Google sign-in error:", error);
         if (error.code === "auth/popup-blocked") {
-          console.info("Popup blocked by browser. Automatically falling back to redirect...");
-          try {
-            await signInWithRedirect(auth, provider);
-          } catch (redirectError) {
-            console.error("Redirect sign-in error:", redirectError);
-            alert(`Sign-in failed: ${redirectError.message}`);
-          }
+          alert(
+            "Pop-up was blocked by your browser!\n\n" +
+            "Please click the pop-up blocked icon on the right side of your address bar (URL bar) and select 'Always allow pop-ups for this site', then click Sign In again."
+          );
         } else if (error.code !== "auth/popup-closed-by-user") {
           alert(`Sign-in failed: ${error.message}`);
         }
-      }
+      });
     });
   }
 
@@ -874,17 +869,7 @@ function handleAuthStateChanged(user) {
 function initFirebase() {
   if (isFirebaseConfigured()) {
     try {
-      // Use 1st-party host on Vercel to prevent 3rd-party cookie blocking
-      const host = window.location.hostname;
-      const isLocal = host === "localhost" || host === "127.0.0.1" || host.includes("192.168.");
-      const effectiveAuthDomain = (!isLocal && host) ? host : firebaseConfig.authDomain;
-
-      const dynamicConfig = {
-        ...firebaseConfig,
-        authDomain: effectiveAuthDomain
-      };
-
-      app = initializeApp(dynamicConfig);
+      app = initializeApp(firebaseConfig);
       auth = getAuth(app);
       db = getFirestore(app);
 
@@ -892,20 +877,6 @@ function initFirebase() {
       setPersistence(auth, browserLocalPersistence).catch((err) => {
         console.warn("Could not enforce browserLocalPersistence:", err);
       });
-
-      // Handle redirect sign-in result (used when popups are blocked)
-      getRedirectResult(auth)
-        .then((result) => {
-          if (result && result.user) {
-            console.log("Successfully signed in via redirect:", result.user);
-          }
-        })
-        .catch((error) => {
-          console.error("Redirect sign-in error:", error);
-          if (error.code !== "auth/popup-closed-by-user") {
-            alert(`Sign-in error: ${error.message}`);
-          }
-        });
 
       onAuthStateChanged(auth, handleAuthStateChanged);
     } catch (error) {
