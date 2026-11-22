@@ -89,6 +89,18 @@
     </nav>
 
     <main class="container py-4">
+      <!-- Authentication Error Alert Banner -->
+      <div id="authAlertBanner" class="alert alert-danger d-none shadow-sm mb-4" role="alert">
+        <div class="d-flex align-items-start justify-content-between">
+          <div>
+            <h6 class="alert-heading fw-bold mb-1" id="authAlertTitle">Authentication Error</h6>
+            <p class="mb-1 small" id="authAlertMessage"></p>
+            <div class="mt-2 p-2 bg-white rounded border border-danger-subtle small font-monospace text-dark" id="authAlertDetails"></div>
+          </div>
+          <button type="button" class="btn-close" id="closeAuthAlert" aria-label="Close"></button>
+        </div>
+      </div>
+
       <h1 class="h3">Financial Dashboard</h1>
 
       <p class="text-muted">Manage your income and expenses in one place.</p>

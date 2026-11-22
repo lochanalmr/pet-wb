@@ -678,20 +678,53 @@ function renderTransactions() {
 // Firebase & Google Authentication
 // --------------------------------------------------
 
+function showAuthError(title, message, details) {
+  const banner = document.querySelector("#authAlertBanner");
+  const titleEl = document.querySelector("#authAlertTitle");
+  const msgEl = document.querySelector("#authAlertMessage");
+  const detailsEl = document.querySelector("#authAlertDetails");
+
+  if (banner && titleEl && msgEl && detailsEl) {
+    titleEl.textContent = title;
+    msgEl.textContent = message;
+    detailsEl.textContent = details;
+    banner.classList.remove("d-none");
+    banner.scrollIntoView({ behavior: "smooth", block: "start" });
+  } else {
+    alert(`${title}\n\n${message}\n\n${details}`);
+  }
+}
+
 function setupAuthUI() {
+  const closeAlertBtn = document.querySelector("#closeAuthAlert");
+  if (closeAlertBtn) {
+    closeAlertBtn.addEventListener("click", () => {
+      const banner = document.querySelector("#authAlertBanner");
+      if (banner) banner.classList.add("d-none");
+    });
+  }
+
   // Sign In with Google
   if (signInButton) {
     signInButton.addEventListener("click", () => {
+      const banner = document.querySelector("#authAlertBanner");
+      if (banner) banner.classList.add("d-none");
+
       if (!isFirebaseConfigured()) {
-        alert(
-          "Firebase is not yet configured!\n\n" +
-          "Please check FIREBASE_API_KEY in Vercel Environment Variables."
+        showAuthError(
+          "Firebase Not Configured",
+          "Firebase API keys were not found in the environment.",
+          "Check that FIREBASE_API_KEY is set in Vercel Project Settings > Environment Variables."
         );
         return;
       }
 
       if (!auth) {
-        alert("Firebase Auth is still initializing. Please wait a moment and try again.");
+        showAuthError(
+          "Auth Initializing",
+          "Firebase Auth is still initializing in the browser.",
+          "Please wait a few seconds and try clicking 'Sign in with Google' again."
+        );
         return;
       }
 
@@ -706,24 +739,35 @@ function setupAuthUI() {
           console.error("Sign-in error details:", error);
 
           if (error.code === "auth/popup-blocked") {
-            alert(
-              "Pop-up Blocked by Browser!\n\n" +
-              "Your browser stopped the Google login window from opening.\n\n" +
-              "Fix: Look at the far right of your address bar for a pop-up blocked icon (window with a red X). Click it, select 'Always allow pop-ups from this site', and click Done. Then click Sign In again."
+            showAuthError(
+              "Pop-up Blocked by Browser [auth/popup-blocked]",
+              "Your browser stopped the Google authentication window from opening.",
+              "Fix: Look at the far right of your browser URL bar for a pop-up blocked icon (or shield in Brave). Click it, select 'Always allow pop-ups for this site', and click Done. Then click Sign in again."
             );
           } else if (error.code === "auth/unauthorized-domain") {
-            alert(
-              "Unauthorized Domain Error [auth/unauthorized-domain]!\n\n" +
-              "This domain is not authorized in your Firebase project.\n\n" +
-              "Fix: In Firebase Console -> Authentication -> Settings -> Authorized domains, click 'Add domain' and add:\npersonal-expense-tracker-lochanalmr.vercel.app"
+            showAuthError(
+              "Domain Not Authorized [auth/unauthorized-domain]",
+              "Firebase has blocked this domain from signing in.",
+              "Fix: Go to Firebase Console -> Authentication -> Settings -> Authorized domains. Click 'Add domain', paste 'personal-expense-tracker-lochanalmr.vercel.app', and click Add."
             );
           } else if (error.code === "auth/operation-not-allowed") {
-            alert(
-              "Google Sign-In Not Enabled [auth/operation-not-allowed]!\n\n" +
-              "Fix: In Firebase Console -> Authentication -> Sign-in method, click 'Google', toggle 'Enable', choose your support email, and click Save."
+            showAuthError(
+              "Google Sign-In Disabled [auth/operation-not-allowed]",
+              "Google Sign-In is not enabled in your Firebase project.",
+              "Fix: Go to Firebase Console -> Authentication -> Sign-in method -> Google -> toggle Enable -> select your support email -> click Save."
+            );
+          } else if (error.code === "auth/invalid-api-key") {
+            showAuthError(
+              "Invalid API Key [auth/invalid-api-key]",
+              "Google rejected your Firebase API key as invalid.",
+              "Fix: Check your FIREBASE_API_KEY environment variable in Vercel to ensure it matches your Firebase project."
             );
           } else {
-            alert(`Sign-In Error [${error.code}]:\n\n${error.message}`);
+            showAuthError(
+              `Sign-In Error [${error.code}]`,
+              error.message,
+              "Check browser Developer Tools Console (F12) for more details."
+            );
           }
         });
     });
