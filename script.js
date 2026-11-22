@@ -685,25 +685,47 @@ function setupAuthUI() {
       if (!isFirebaseConfigured()) {
         alert(
           "Firebase is not yet configured!\n\n" +
-          "Please update 'firebase-config.js' with your Firebase project credentials."
+          "Please check FIREBASE_API_KEY in Vercel Environment Variables."
         );
+        return;
+      }
+
+      if (!auth) {
+        alert("Firebase Auth is still initializing. Please wait a moment and try again.");
         return;
       }
 
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: "select_account" });
 
-      signInWithPopup(auth, provider).catch((error) => {
-        console.error("Google sign-in error:", error);
-        if (error.code === "auth/popup-blocked") {
-          alert(
-            "Pop-up was blocked by your browser!\n\n" +
-            "Please click the pop-up blocked icon on the right side of your address bar (URL bar) and select 'Always allow pop-ups for this site', then click Sign In again."
-          );
-        } else if (error.code !== "auth/popup-closed-by-user") {
-          alert(`Sign-in failed: ${error.message}`);
-        }
-      });
+      signInWithPopup(auth, provider)
+        .then((result) => {
+          console.log("Successfully signed in:", result.user.email);
+        })
+        .catch((error) => {
+          console.error("Sign-in error details:", error);
+
+          if (error.code === "auth/popup-blocked") {
+            alert(
+              "Pop-up Blocked by Browser!\n\n" +
+              "Your browser stopped the Google login window from opening.\n\n" +
+              "Fix: Look at the far right of your address bar for a pop-up blocked icon (window with a red X). Click it, select 'Always allow pop-ups from this site', and click Done. Then click Sign In again."
+            );
+          } else if (error.code === "auth/unauthorized-domain") {
+            alert(
+              "Unauthorized Domain Error [auth/unauthorized-domain]!\n\n" +
+              "This domain is not authorized in your Firebase project.\n\n" +
+              "Fix: In Firebase Console -> Authentication -> Settings -> Authorized domains, click 'Add domain' and add:\npersonal-expense-tracker-lochanalmr.vercel.app"
+            );
+          } else if (error.code === "auth/operation-not-allowed") {
+            alert(
+              "Google Sign-In Not Enabled [auth/operation-not-allowed]!\n\n" +
+              "Fix: In Firebase Console -> Authentication -> Sign-in method, click 'Google', toggle 'Enable', choose your support email, and click Save."
+            );
+          } else {
+            alert(`Sign-In Error [${error.code}]:\n\n${error.message}`);
+          }
+        });
     });
   }
 
