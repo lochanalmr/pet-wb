@@ -12,15 +12,79 @@
     />
 
     <link href="style.css" rel="stylesheet" />
-    <script src="script.js" defer></script>
+    <script type="module" src="script.js"></script>
 
     <title>Personal Expense Tracker</title>
   </head>
 
   <body class="color-scheme-light">
     <nav class="navbar md:navbar-expand bg-1" data-bs-theme="dark">
-      <div class="container">
-        <span class="navbar-brand">Personal Expense Tracker</span>
+      <div class="container d-flex align-items-center justify-content-between">
+        <span class="navbar-brand mb-0">Personal Expense Tracker</span>
+
+        <!-- Authentication / User Profile in Top Right Corner -->
+        <div id="authSection" class="d-flex align-items-center gap-2">
+          <!-- Sign In Button (shown when logged out) -->
+          <button
+            id="signInButton"
+            class="btn btn-sm btn-outline-light d-inline-flex align-items-center gap-2"
+            type="button"
+          >
+            <svg width="16" height="16" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M17.64 9.20455C17.64 8.56636 17.5827 7.95273 17.4764 7.36364H9V10.845H13.8436C13.635 11.97 13.0009 12.9232 12.0477 13.5614V15.8195H14.9564C16.6582 14.2527 17.64 11.9455 17.64 9.20455Z" fill="#4285F4"/>
+              <path d="M9 18C11.43 18 13.4673 17.1941 14.9564 15.8195L12.0477 13.5614C11.2418 14.1014 10.2109 14.4205 9 14.4205C6.65591 14.4205 4.67182 12.8373 3.96409 10.71H0.957275V13.0418C2.43818 15.9832 5.48182 18 9 18Z" fill="#34A853"/>
+              <path d="M3.96409 10.71C3.78409 10.17 3.68182 9.59318 3.68182 9C3.68182 8.40682 3.78409 7.83 3.96409 7.29V4.95818H0.957275C0.347727 6.17318 0 7.54773 0 9C0 10.4523 0.347727 11.8268 0.957275 13.0418L3.96409 10.71Z" fill="#FBBC05"/>
+              <path d="M9 3.57955C10.3214 3.57955 11.5077 4.03364 12.4405 4.92545L15.0218 2.34409C13.4632 0.891818 11.4259 0 9 0C5.48182 0 2.43818 2.01682 0.957275 4.95818L3.96409 7.29C4.67182 5.16273 6.65591 3.57955 9 3.57955Z" fill="#EA4335"/>
+            </svg>
+            <span>Sign in with Google</span>
+          </button>
+
+          <!-- User Profile & Avatar (shown when logged in) -->
+          <div id="userProfile" class="d-none align-items-center gap-2 position-relative">
+            <span id="cloudStatusBadge" class="badge bg-success-subtle text-success-emphasis border border-success-subtle rounded-pill small px-2 py-1 d-none d-sm-inline-block">
+              Cloud Synced
+            </span>
+            <button
+              id="userProfileButton"
+              class="btn p-0 border-0 bg-transparent position-relative rounded-circle"
+              type="button"
+              aria-label="User account menu"
+              aria-expanded="false"
+            >
+              <img
+                id="userAvatar"
+                src=""
+                alt="Profile picture"
+                class="rounded-circle user-avatar shadow-sm"
+                width="38"
+                height="38"
+                referrerpolicy="no-referrer"
+              />
+            </button>
+
+            <!-- Dropdown Menu -->
+            <div id="userDropdown" class="user-dropdown-menu shadow d-none">
+              <div class="dropdown-header-custom px-3 py-2 border-bottom">
+                <div id="userName" class="fw-bold text-truncate text-dark small">User</div>
+                <div id="userEmail" class="text-muted text-truncate small">user@example.com</div>
+              </div>
+              <div class="p-1">
+                <button
+                  id="signOutButton"
+                  class="dropdown-item-custom w-100 text-start text-danger btn-sm border-0 bg-transparent px-3 py-2 rounded d-flex align-items-center gap-2"
+                  type="button"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                  </svg>
+                  <span>Sign Out</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </nav>
 

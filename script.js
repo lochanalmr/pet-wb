@@ -1,5 +1,24 @@
 "use strict";
 
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getAuth,
+  signInWithPopup,
+  GoogleAuthProvider,
+  signOut,
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {
+  getFirestore,
+  collection,
+  doc,
+  setDoc,
+  deleteDoc,
+  onSnapshot,
+  writeBatch
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { firebaseConfig, isFirebaseConfigured } from "./firebase-config.js";
+
 const STORAGE_KEY = "personalExpenseTracker.transactions";
 
 let transactions = loadTransactions();
@@ -9,6 +28,24 @@ let selectedTransactionCategory = "";
 let currentTypeFilter = "all";
 let currentSearchTerm = "";
 let storageWarningShown = false;
+
+// Firebase & Auth State
+let app = null;
+let auth = null;
+let db = null;
+let currentUser = null;
+let unsubscribeFirestore = null;
+
+// Auth & Profile UI elements
+const signInButton = document.querySelector("#signInButton");
+const userProfile = document.querySelector("#userProfile");
+const userProfileButton = document.querySelector("#userProfileButton");
+const userAvatar = document.querySelector("#userAvatar");
+const userDropdown = document.querySelector("#userDropdown");
+const userName = document.querySelector("#userName");
+const userEmail = document.querySelector("#userEmail");
+const signOutButton = document.querySelector("#signOutButton");
+const cloudStatusBadge = document.querySelector("#cloudStatusBadge");
 
 // Dashboard
 const totalIncomeElement = document.querySelector("#totalIncome");
@@ -311,7 +348,7 @@ function resetTransactionForm() {
 
 clearFormButton.addEventListener("click", resetTransactionForm);
 
-transactionForm.addEventListener("submit", (event) => {
+transactionForm.addEventListener("submit", async (event) => {
   event.preventDefault();
 
   const description = transactionDescriptionInput.value.trim();
@@ -390,12 +427,23 @@ transactionForm.addEventListener("submit", (event) => {
     createdAt: Date.now()
   };
 
-  transactions.unshift(transaction);
-
-  saveTransactions();
-
-  updateDashboard();
-  renderTransactions();
+  if (currentUser && db) {
+    try {
+      await setDoc(doc(db, "users", currentUser.uid, "transactions", transaction.id), transaction);
+    } catch (error) {
+      console.error("Failed to save transaction to Firestore:", error);
+      alert("Could not save transaction to cloud. Saved locally instead.");
+      transactions.unshift(transaction);
+      saveTransactions();
+      updateDashboard();
+      renderTransactions();
+    }
+  } else {
+    transactions.unshift(transaction);
+    saveTransactions();
+    updateDashboard();
+    renderTransactions();
+  }
 
   resetTransactionForm();
 });
@@ -442,7 +490,7 @@ transactionSearchInput.addEventListener("input", () => {
 // Delete transaction
 // --------------------------------------------------
 
-function deleteTransaction(id) {
+async function deleteTransaction(id) {
   const transaction = transactions.find(
     (item) => item.id === id
   );
@@ -457,6 +505,16 @@ function deleteTransaction(id) {
 
   if (!confirmed) {
     return;
+  }
+
+  if (currentUser && db) {
+    try {
+      await deleteDoc(doc(db, "users", currentUser.uid, "transactions", id));
+      return;
+    } catch (error) {
+      console.error("Failed to delete transaction from Firestore:", error);
+      alert("Could not delete transaction from cloud.");
+    }
   }
 
   transactions = transactions.filter(
@@ -613,8 +671,218 @@ function renderTransactions() {
 
 
 // --------------------------------------------------
+// Firebase & Google Authentication
+// --------------------------------------------------
+
+function setupAuthUI() {
+  // Sign In with Google
+  if (signInButton) {
+    signInButton.addEventListener("click", async () => {
+      if (!isFirebaseConfigured()) {
+        alert(
+          "Firebase is not yet configured!\n\n" +
+          "Please update 'firebase-config.js' with your Firebase project credentials."
+        );
+        return;
+      }
+
+      try {
+        const provider = new GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: "select_account" });
+        await signInWithPopup(auth, provider);
+      } catch (error) {
+        console.error("Google sign-in error:", error);
+        if (error.code !== "auth/popup-closed-by-user") {
+          alert(`Sign-in failed: ${error.message}`);
+        }
+      }
+    });
+  }
+
+  // Toggle user dropdown on avatar click
+  if (userProfileButton) {
+    userProfileButton.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const isHidden = userDropdown.classList.contains("d-none");
+      userDropdown.classList.toggle("d-none", !isHidden);
+      userProfileButton.setAttribute("aria-expanded", isHidden ? "true" : "false");
+    });
+  }
+
+  // Close dropdown when clicking outside
+  document.addEventListener("click", (e) => {
+    if (userProfile && !userProfile.contains(e.target)) {
+      if (userDropdown) {
+        userDropdown.classList.add("d-none");
+      }
+      if (userProfileButton) {
+        userProfileButton.setAttribute("aria-expanded", "false");
+      }
+    }
+  });
+
+  // Avatar error fallback
+  if (userAvatar) {
+    userAvatar.addEventListener("error", () => {
+      const name = currentUser?.displayName || "User";
+      userAvatar.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0D8ABC&color=fff`;
+    });
+  }
+
+  // Sign out
+  if (signOutButton) {
+    signOutButton.addEventListener("click", async () => {
+      try {
+        if (auth) {
+          await signOut(auth);
+        }
+        if (userDropdown) {
+          userDropdown.classList.add("d-none");
+        }
+      } catch (error) {
+        console.error("Sign-out error:", error);
+      }
+    });
+  }
+}
+
+// Sync local transactions into Firestore for newly signed in user
+async function syncLocalTransactionsToFirestore(user) {
+  if (!db || !user) return;
+
+  const localList = loadTransactions();
+  if (localList.length === 0) return;
+
+  try {
+    const batch = writeBatch(db);
+    localList.forEach((tx) => {
+      const docRef = doc(db, "users", user.uid, "transactions", tx.id);
+      batch.set(docRef, tx);
+    });
+    await batch.commit();
+  } catch (error) {
+    console.warn("Could not sync existing local transactions to Firestore:", error);
+  }
+}
+
+function handleAuthStateChanged(user) {
+  currentUser = user;
+
+  if (user) {
+    // Show signed-in user UI
+    if (signInButton) signInButton.classList.add("d-none");
+    if (userProfile) {
+      userProfile.classList.remove("d-none");
+      userProfile.classList.add("d-flex");
+    }
+
+    if (userName) userName.textContent = user.displayName || "Google User";
+    if (userEmail) userEmail.textContent = user.email || "";
+
+    if (userAvatar) {
+      userAvatar.src =
+        user.photoURL ||
+        `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || "User")}&background=0D8ABC&color=fff`;
+      userAvatar.alt = `${user.displayName || "User"}'s profile picture`;
+    }
+
+    if (cloudStatusBadge) {
+      cloudStatusBadge.textContent = "Cloud Synced";
+      cloudStatusBadge.className =
+        "badge bg-success-subtle text-success-emphasis border border-success-subtle rounded-pill small px-2 py-1 d-none d-sm-inline-block";
+    }
+
+    // Subscribe to Firestore for real-time transaction sync
+    if (unsubscribeFirestore) {
+      unsubscribeFirestore();
+      unsubscribeFirestore = null;
+    }
+
+    const userTransactionsRef = collection(db, "users", user.uid, "transactions");
+
+    unsubscribeFirestore = onSnapshot(
+      userTransactionsRef,
+      async (snapshot) => {
+        if (snapshot.empty && loadTransactions().length > 0) {
+          // Sync any pre-existing local transactions to the cloud
+          await syncLocalTransactionsToFirestore(user);
+          return;
+        }
+
+        const cloudTransactions = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          cloudTransactions.push({
+            id: data.id || docSnap.id,
+            date: data.date,
+            description: data.description,
+            type: data.type,
+            category: data.category,
+            amount: Number(data.amount),
+            createdAt: Number(data.createdAt) || 0
+          });
+        });
+
+        transactions = cloudTransactions;
+        saveTransactions(); // Cache locally
+        updateDashboard();
+        renderTransactions();
+      },
+      (error) => {
+        console.error("Firestore subscription error:", error);
+        if (cloudStatusBadge) {
+          cloudStatusBadge.textContent = "Sync Error";
+          cloudStatusBadge.className =
+            "badge bg-danger-subtle text-danger-emphasis border border-danger-subtle rounded-pill small px-2 py-1 d-none d-sm-inline-block";
+        }
+      }
+    );
+  } else {
+    // Show signed-out UI
+    if (unsubscribeFirestore) {
+      unsubscribeFirestore();
+      unsubscribeFirestore = null;
+    }
+
+    if (signInButton) signInButton.classList.remove("d-none");
+    if (userProfile) {
+      userProfile.classList.add("d-none");
+      userProfile.classList.remove("d-flex");
+    }
+    if (userDropdown) userDropdown.classList.add("d-none");
+
+    // Load local transactions
+    transactions = loadTransactions();
+    updateDashboard();
+    renderTransactions();
+  }
+}
+
+function initFirebase() {
+  if (isFirebaseConfigured()) {
+    try {
+      app = initializeApp(firebaseConfig);
+      auth = getAuth(app);
+      db = getFirestore(app);
+      onAuthStateChanged(auth, handleAuthStateChanged);
+    } catch (error) {
+      console.error("Error initializing Firebase:", error);
+    }
+  } else {
+    console.info(
+      "Firebase configuration pending: Running in local offline mode. " +
+      "Update firebase-config.js to enable Google Sign-In and Cloud Firestore."
+    );
+  }
+}
+
+
+// --------------------------------------------------
 // Initialise application
 // --------------------------------------------------
+
+setupAuthUI();
+initFirebase();
 
 // Start with today's date in the form.
 transactionDateInput.value = getLocalDateString();
