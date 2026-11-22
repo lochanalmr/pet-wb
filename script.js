@@ -4,6 +4,8 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import {
   getAuth,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider,
   signOut,
   onAuthStateChanged
@@ -686,13 +688,22 @@ function setupAuthUI() {
         return;
       }
 
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: "select_account" });
+
       try {
-        const provider = new GoogleAuthProvider();
-        provider.setCustomParameters({ prompt: "select_account" });
         await signInWithPopup(auth, provider);
       } catch (error) {
         console.error("Google sign-in error:", error);
-        if (error.code !== "auth/popup-closed-by-user") {
+        if (error.code === "auth/popup-blocked") {
+          console.info("Popup blocked by browser. Automatically falling back to redirect...");
+          try {
+            await signInWithRedirect(auth, provider);
+          } catch (redirectError) {
+            console.error("Redirect sign-in error:", redirectError);
+            alert(`Sign-in failed: ${redirectError.message}`);
+          }
+        } else if (error.code !== "auth/popup-closed-by-user") {
           alert(`Sign-in failed: ${error.message}`);
         }
       }
@@ -864,6 +875,21 @@ function initFirebase() {
       app = initializeApp(firebaseConfig);
       auth = getAuth(app);
       db = getFirestore(app);
+
+      // Handle redirect sign-in result (used when popups are blocked)
+      getRedirectResult(auth)
+        .then((result) => {
+          if (result && result.user) {
+            console.log("Successfully signed in via redirect:", result.user);
+          }
+        })
+        .catch((error) => {
+          console.error("Redirect sign-in error:", error);
+          if (error.code !== "auth/popup-closed-by-user") {
+            alert(`Sign-in error: ${error.message}`);
+          }
+        });
+
       onAuthStateChanged(auth, handleAuthStateChanged);
     } catch (error) {
       console.error("Error initializing Firebase:", error);
