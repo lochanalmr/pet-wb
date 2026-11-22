@@ -3,6 +3,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getAuth,
+  setPersistence,
+  browserLocalPersistence,
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
@@ -872,9 +874,24 @@ function handleAuthStateChanged(user) {
 function initFirebase() {
   if (isFirebaseConfigured()) {
     try {
-      app = initializeApp(firebaseConfig);
+      // Use 1st-party host on Vercel to prevent 3rd-party cookie blocking
+      const host = window.location.hostname;
+      const isLocal = host === "localhost" || host === "127.0.0.1" || host.includes("192.168.");
+      const effectiveAuthDomain = (!isLocal && host) ? host : firebaseConfig.authDomain;
+
+      const dynamicConfig = {
+        ...firebaseConfig,
+        authDomain: effectiveAuthDomain
+      };
+
+      app = initializeApp(dynamicConfig);
       auth = getAuth(app);
       db = getFirestore(app);
+
+      // Enforce persistent session in browser localStorage/IndexedDB
+      setPersistence(auth, browserLocalPersistence).catch((err) => {
+        console.warn("Could not enforce browserLocalPersistence:", err);
+      });
 
       // Handle redirect sign-in result (used when popups are blocked)
       getRedirectResult(auth)
