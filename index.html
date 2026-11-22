@@ -12,6 +12,7 @@
     />
 
     <link href="style.css" rel="stylesheet" />
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script type="module" src="script.js"></script>
 
     <title>Personal Expense Tracker</title>
@@ -24,10 +25,13 @@
 
         <!-- Authentication / User Profile in Top Right Corner -->
         <div id="authSection" class="d-flex align-items-center gap-2">
-          <!-- Sign In Button (shown when logged out) -->
+          <!-- Google Native Sign-in Button Container (GIS) -->
+          <div id="g_id_signin"></div>
+
+          <!-- Fallback Sign In Button (shown if GIS is blocked) -->
           <button
             id="signInButton"
-            class="btn btn-sm btn-outline-light d-inline-flex align-items-center gap-2"
+            class="btn btn-sm btn-outline-light d-none align-items-center gap-2"
             type="button"
           >
             <svg width="16" height="16" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
