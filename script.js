@@ -704,7 +704,7 @@ function setupAuthUI() {
     });
   }
 
-  // Sign In with Google
+  // Sign In with Google via full-page redirect (bypasses all browser pop-up blockers)
   if (signInButton) {
     signInButton.addEventListener("click", () => {
       const banner = document.querySelector("#authAlertBanner");
@@ -731,45 +731,41 @@ function setupAuthUI() {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: "select_account" });
 
-      signInWithPopup(auth, provider)
-        .then((result) => {
-          console.log("Successfully signed in:", result.user.email);
-        })
-        .catch((error) => {
-          console.error("Sign-in error details:", error);
+      signInButton.disabled = true;
+      signInButton.innerHTML = `
+        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+        <span>Connecting to Google...</span>
+      `;
 
-          if (error.code === "auth/popup-blocked") {
-            showAuthError(
-              "Pop-up Blocked by Browser [auth/popup-blocked]",
-              "Your browser stopped the Google authentication window from opening.",
-              "Fix: Look at the far right of your browser URL bar for a pop-up blocked icon (or shield in Brave). Click it, select 'Always allow pop-ups for this site', and click Done. Then click Sign in again."
-            );
-          } else if (error.code === "auth/unauthorized-domain") {
-            showAuthError(
-              "Domain Not Authorized [auth/unauthorized-domain]",
-              "Firebase has blocked this domain from signing in.",
-              "Fix: Go to Firebase Console -> Authentication -> Settings -> Authorized domains. Click 'Add domain', paste 'personal-expense-tracker-lochanalmr.vercel.app', and click Add."
-            );
-          } else if (error.code === "auth/operation-not-allowed") {
-            showAuthError(
-              "Google Sign-In Disabled [auth/operation-not-allowed]",
-              "Google Sign-In is not enabled in your Firebase project.",
-              "Fix: Go to Firebase Console -> Authentication -> Sign-in method -> Google -> toggle Enable -> select your support email -> click Save."
-            );
-          } else if (error.code === "auth/invalid-api-key") {
-            showAuthError(
-              "Invalid API Key [auth/invalid-api-key]",
-              "Google rejected your Firebase API key as invalid.",
-              "Fix: Check your FIREBASE_API_KEY environment variable in Vercel to ensure it matches your Firebase project."
-            );
-          } else {
-            showAuthError(
-              `Sign-In Error [${error.code}]`,
-              error.message,
-              "Check browser Developer Tools Console (F12) for more details."
-            );
-          }
-        });
+      signInWithRedirect(auth, provider).catch((error) => {
+        signInButton.disabled = false;
+        signInButton.innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M17.64 9.20455C17.64 8.56636 17.5827 7.95273 17.4764 7.36364H9V10.845H13.8436C13.635 11.97 13.0009 12.9232 12.0477 13.5614V15.8195H14.9564C16.6582 14.2527 17.64 11.9455 17.64 9.20455Z" fill="#4285F4"/>
+            <path d="M9 18C11.43 18 13.4673 17.1941 14.9564 15.8195L12.0477 13.5614C11.2418 14.1014 10.2109 14.4205 9 14.4205C6.65591 14.4205 4.67182 12.8373 3.96409 10.71H0.957275V13.0418C2.43818 15.9832 5.48182 18 9 18Z" fill="#34A853"/>
+            <path d="M3.96409 10.71C3.78409 10.17 3.68182 9.59318 3.68182 9C3.68182 8.40682 3.78409 7.83 3.96409 7.29V4.95818H0.957275C0.347727 6.17318 0 7.54773 0 9C0 10.4523 0.347727 11.8268 0.957275 13.0418L3.96409 10.71Z" fill="#FBBC05"/>
+            <path d="M9 3.57955C10.3214 3.57955 11.5077 4.03364 12.4405 4.92545L15.0218 2.34409C13.4632 0.891818 11.4259 0 9 0C5.48182 0 2.43818 2.01682 0.957275 4.95818L3.96409 7.29C4.67182 5.16273 6.65591 3.57955 9 3.57955Z" fill="#EA4335"/>
+          </svg>
+          <span>Sign in with Google</span>
+        `;
+        console.error("Sign-in redirect error details:", error);
+
+        if (error.code === "auth/unauthorized-domain") {
+          showAuthError(
+            "Domain Not Authorized [auth/unauthorized-domain]",
+            "Firebase has blocked this domain from signing in.",
+            "Fix: Go to Firebase Console -> Authentication -> Settings -> Authorized domains. Click 'Add domain', paste 'personal-expense-tracker-lochanalmr.vercel.app', and click Add."
+          );
+        } else if (error.code === "auth/operation-not-allowed") {
+          showAuthError(
+            "Google Sign-In Disabled [auth/operation-not-allowed]",
+            "Google Sign-In is not enabled in your Firebase project.",
+            "Fix: Go to Firebase Console -> Authentication -> Sign-in method -> Google -> toggle Enable -> select your support email -> click Save."
+          );
+        } else {
+          showAuthError(`Sign-In Error [${error.code}]`, error.message, "Could not start redirect to Google.");
+        }
+      });
     });
   }
 
@@ -843,6 +839,14 @@ function handleAuthStateChanged(user) {
   currentUser = user;
 
   if (user) {
+    try {
+      localStorage.setItem("pet_cached_user", JSON.stringify({
+        displayName: user.displayName,
+        email: user.email,
+        photoURL: user.photoURL
+      }));
+    } catch (e) {}
+
     // Show signed-in user UI
     if (signInButton) signInButton.classList.add("d-none");
     if (userProfile) {
@@ -912,13 +916,30 @@ function handleAuthStateChanged(user) {
       }
     );
   } else {
+    // Clear user cache on sign out
+    try {
+      localStorage.removeItem("pet_cached_user");
+    } catch (e) {}
+
     // Show signed-out UI
     if (unsubscribeFirestore) {
       unsubscribeFirestore();
       unsubscribeFirestore = null;
     }
 
-    if (signInButton) signInButton.classList.remove("d-none");
+    if (signInButton) {
+      signInButton.classList.remove("d-none");
+      signInButton.disabled = false;
+      signInButton.innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M17.64 9.20455C17.64 8.56636 17.5827 7.95273 17.4764 7.36364H9V10.845H13.8436C13.635 11.97 13.0009 12.9232 12.0477 13.5614V15.8195H14.9564C16.6582 14.2527 17.64 11.9455 17.64 9.20455Z" fill="#4285F4"/>
+          <path d="M9 18C11.43 18 13.4673 17.1941 14.9564 15.8195L12.0477 13.5614C11.2418 14.1014 10.2109 14.4205 9 14.4205C6.65591 14.4205 4.67182 12.8373 3.96409 10.71H0.957275V13.0418C2.43818 15.9832 5.48182 18 9 18Z" fill="#34A853"/>
+          <path d="M3.96409 10.71C3.78409 10.17 3.68182 9.59318 3.68182 9C3.68182 8.40682 3.78409 7.83 3.96409 7.29V4.95818H0.957275C0.347727 6.17318 0 7.54773 0 9C0 10.4523 0.347727 11.8268 0.957275 13.0418L3.96409 10.71Z" fill="#FBBC05"/>
+          <path d="M9 3.57955C10.3214 3.57955 11.5077 4.03364 12.4405 4.92545L15.0218 2.34409C13.4632 0.891818 11.4259 0 9 0C5.48182 0 2.43818 2.01682 0.957275 4.95818L3.96409 7.29C4.67182 5.16273 6.65591 3.57955 9 3.57955Z" fill="#EA4335"/>
+        </svg>
+        <span>Sign in with Google</span>
+      `;
+    }
     if (userProfile) {
       userProfile.classList.add("d-none");
       userProfile.classList.remove("d-flex");
@@ -939,10 +960,26 @@ function initFirebase() {
       auth = getAuth(app);
       db = getFirestore(app);
 
-      // Enforce persistent session in browser localStorage/IndexedDB
-      setPersistence(auth, browserLocalPersistence).catch((err) => {
-        console.warn("Could not enforce browserLocalPersistence:", err);
-      });
+      // Handle redirect return from Google sign-in
+      getRedirectResult(auth)
+        .then((result) => {
+          if (result && result.user) {
+            console.log("Logged in from Google redirect:", result.user.email);
+            handleAuthStateChanged(result.user);
+          }
+        })
+        .catch((error) => {
+          console.error("Redirect result error:", error);
+          if (error.code === "auth/unauthorized-domain") {
+            showAuthError(
+              "Domain Not Authorized [auth/unauthorized-domain]",
+              "Google has blocked login because this domain is not on your Firebase whitelist.",
+              "Fix: In Firebase Console -> Authentication -> Settings -> Authorized domains, click 'Add domain' and add: personal-expense-tracker-lochanalmr.vercel.app"
+            );
+          } else {
+            showAuthError(`Redirect Sign-in Error [${error.code}]`, error.message, "Could not complete sign in.");
+          }
+        });
 
       onAuthStateChanged(auth, handleAuthStateChanged);
     } catch (error) {
@@ -960,6 +997,21 @@ function initFirebase() {
 // --------------------------------------------------
 // Initialise application
 // --------------------------------------------------
+
+// Restore cached user profile immediately to eliminate UI flicker
+try {
+  const cachedUser = JSON.parse(localStorage.getItem("pet_cached_user") || "null");
+  if (cachedUser) {
+    if (userName) userName.textContent = cachedUser.displayName || "Google User";
+    if (userEmail) userEmail.textContent = cachedUser.email || "";
+    if (userAvatar) userAvatar.src = cachedUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(cachedUser.displayName || "User")}&background=0D8ABC&color=fff`;
+    if (signInButton) signInButton.classList.add("d-none");
+    if (userProfile) {
+      userProfile.classList.remove("d-none");
+      userProfile.classList.add("d-flex");
+    }
+  }
+} catch (e) {}
 
 setupAuthUI();
 initFirebase();
